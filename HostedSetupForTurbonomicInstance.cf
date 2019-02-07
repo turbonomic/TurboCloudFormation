@@ -1,0 +1,278 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Parameters": {
+        "InstanceType": {
+            "Type": "String",
+            "Default": "m5.xlarge",
+            "AllowedValues": [
+                "m5.large",
+                "m5.xlarge",
+                "m5.2xlarge"
+            ],
+            "Description": "Enter m5.2xlarge, m5.xlarge, m5.large. Default is m5.large."
+        },
+        "KeyPair": {
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "Description": "Select an existing Amazon EC2 Key Pair"
+        },
+        "IAMRoleName": {
+            "Type": "String",
+            "Default": "TurbonomicRole",
+            "Description": "Enter Name for the IAM Role"
+        }
+    },
+    "Mappings": {
+        "RegionMap": {
+            "us-east-1": {
+                "32": "ami-2ccc4453"
+            },
+            "us-east-2": {
+                "32": "ami-77e0dd12"
+            },
+            "us-west-1": {
+                "32": "ami-f7869897"
+            },
+            "us-west-2": {
+                "32": "ami-d6d9a9ae"
+            },
+            "ap-northeast-1": {
+                "32": "ami-3263894d"
+            },
+            "ap-northeast-2": {
+                "32": "ami-8fca62e1"
+            },
+            "ap-northeast-3": {
+                "32": "ami-6411e20d"
+            },
+            "ap-south-1": {
+                "32": "ami-6f331100"
+            },
+            "ap-southeast-1": {
+                "32": "ami-922017ee"
+            },
+            "ap-southeast-2": {
+                "32": "ami-cfce18ad"
+            },
+            "ca-central-1": {
+                "32": "ami-dfad2dbb"
+            },
+            "cn-north-1": {
+                "32": "ami-66f28c34"
+            },
+            "cn-northwest-1": {
+                "32": "ami-6411e20d"
+            },
+            "eu-central-1": {
+                "32": "ami-c9c7978c"
+            },
+            "eu-west-1": {
+                "32": "ami-c6fec8bf"
+            },
+            "eu-west-2": {
+                "32": "ami-afbb56c8"
+            },
+            "eu-west-3": {
+                "32": "ami-5d843520"
+            },
+            "sa-east-1": {
+                "32": "ami-b60854da"
+            }
+        }
+    },
+    "Resources": {
+        "AutoTurbonomic": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        32
+                    ]
+                },
+                "EbsOptimized": true,
+                "InstanceInitiatedShutdownBehavior": "stop",
+                "IamInstanceProfile": {
+                    "Ref": "TurbonomicInstanceProfile"
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "SubnetId": {
+                    "Ref": "TurbonomicSubnet"
+                },
+                "KeyName": {
+                    "Ref": "KeyPair"
+                },
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "TurbonomicSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "TurbonomicSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": "TurbonomicSecurityGroup",
+                "GroupDescription": "Creates and limits access to Turbonomic instance through port 443 only",
+                "VpcId": {
+                    "Ref": "TurbonomicVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80
+                    }
+                ]
+            },
+            "DependsOn": [
+                "TurbonomicVPC"
+            ]
+        },
+        "TurbonomicInstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": "TurbonomicInstanceProfile",
+                "Roles": [
+                    {
+                        "Ref": "TurbonomicRole"
+                    }
+                ]
+            },
+            "DependsOn": [
+                "TurbonomicVPC"
+            ]
+        },
+        "TurbonomicRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Ref": "IAMRoleName"
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AmazonEC2FullAccess",
+                    "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
+                    "arn:aws:iam::aws:policy/AmazonRDSFullAccess",
+                    "arn:aws:iam::aws:policy/AWSOrganizationsReadOnlyAccess"
+                ],
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": "sts:AssumeRole",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "AssumeRolePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "sts:AssumeRole",
+                                    "Resource": "arn:aws:iam::*:role/*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "TurbonomicVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "172.31.0.0/16",
+                "EnableDnsSupport": true,
+                "EnableDnsHostnames": true,
+                "InstanceTenancy": "default"
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Metadata": {
+                "AWS::CloudFormation::Designer": {
+                    "id": "05cafe26-0d8a-4641-bac7-fb915a0dbe7e"
+                }
+            }
+        },
+        "VPCGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TurbonomicVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "TurbonomicSubnet": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "CidrBlock": "172.31.0.0/20",
+                "MapPublicIpOnLaunch": true,
+                "VpcId": {
+                    "Ref": "TurbonomicVPC"
+                }
+            },
+            "DependsOn": [
+                "TurbonomicVPC"
+            ]
+        },
+        "RouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TurbonomicVPC"
+                }
+            }
+        },
+        "InternetRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "VPCGatewayAttachment",
+            "Properties": {
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "RouteTableId": {
+                    "Ref": "RouteTable"
+                }
+            }
+        },
+        "SubnetARouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "RouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "TurbonomicSubnet"
+                }
+            }
+        }
+    }
+}
+

@@ -1,0 +1,35 @@
+{
+  "Parameters" : {
+    "TrustingAccount" : {
+      "Description" : "Specify the Account number for the instance which will assume this role",
+      "Type" : "Number"
+    }
+  },
+  "Resources": {
+    "TurbonomicTargetAssumedRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": [ "Fn::Join" : [ "", [ "arn:aws:iam::",{ "Ref":"TrustingAccount" },":root"]] ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess",
+          "arn:aws:iam::aws:policy/AmazonRDSReadOnlyAccess",
+          "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
+          "arn:aws:iam::aws:policy/AWSOrganizationsReadOnlyAccess"
+        ]
+      }
+    }
+  }
+}
