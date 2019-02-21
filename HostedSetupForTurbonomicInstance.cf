@@ -19,7 +19,11 @@
             "Type": "String",
             "Default": "TurbonomicRole",
             "Description": "Enter Name for the IAM Role"
-        }
+        },
+	"Customer": {
+	    "Type":"String",
+	    "Description": "Enter a unique customer name"
+	}
     },
     "Mappings": {
         "RegionMap": {
@@ -143,10 +147,18 @@
                 "TurbonomicVPC"
             ]
         },
-        "TurbonomicInstanceProfile": {
+	"TurbonomicInstanceProfile": {
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
-                "InstanceProfileName": "TurbonomicInstanceProfile",
+	        "InstanceProfileName": {
+			"Fn::Join" : [
+				   "", [
+				       "",
+				       "TurbonomicInstanceProfile",
+				       { "Ref":"Customer" }
+				   ]
+			]
+		},
                 "Roles": [
                     {
                         "Ref": "TurbonomicRole"
@@ -161,7 +173,13 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Ref": "IAMRoleName"
+			"Fn::Join" : [
+			   "", [
+			        { "Ref": "IAMRoleName" },
+				"-",
+				{ "Ref":"Customer" }
+			   ]
+			 ]
                 },
                 "ManagedPolicyArns": [
                     "arn:aws:iam::aws:policy/AmazonEC2FullAccess",
