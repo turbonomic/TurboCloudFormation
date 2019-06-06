@@ -1,296 +1,357 @@
-{
-    "AWSTemplateFormatVersion": "2010-09-09",
-    "Parameters": {
-        "InstanceType": {
-            "Type": "String",
-            "Default": "m5.xlarge",
-            "AllowedValues": [
-                "m5.large",
-                "m5.xlarge",
-                "m5.2xlarge"
-            ],
-            "Description": "Enter m5.2xlarge, m5.xlarge, m5.large. Default is m5.large."
-        },
-        "KeyPair": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Description": "Select an existing Amazon EC2 Key Pair"
-        },
-        "IAMRoleName": {
-            "Type": "String",
-            "Default": "TurbonomicRole",
-            "Description": "Enter Name for the IAM Role"
-        },
-	"Customer": {
-	    "Type":"String",
-	    "Description": "Enter a unique customer name"
-	}
-    },
-    "Mappings": {
-        "RegionMap": {
-            "us-east-1": {
-                "32": "ami-2ccc4453"
-            },
-            "us-east-2": {
-                "32": "ami-77e0dd12"
-            },
-            "us-west-1": {
-                "32": "ami-f7869897"
-            },
-            "us-west-2": {
-                "32": "ami-d6d9a9ae"
-            },
-            "ap-northeast-1": {
-                "32": "ami-3263894d"
-            },
-            "ap-northeast-2": {
-                "32": "ami-8fca62e1"
-            },
-            "ap-northeast-3": {
-                "32": "ami-6411e20d"
-            },
-            "ap-south-1": {
-                "32": "ami-6f331100"
-            },
-            "ap-southeast-1": {
-                "32": "ami-922017ee"
-            },
-            "ap-southeast-2": {
-                "32": "ami-cfce18ad"
-            },
-            "ca-central-1": {
-                "32": "ami-dfad2dbb"
-            },
-            "cn-north-1": {
-                "32": "ami-66f28c34"
-            },
-            "cn-northwest-1": {
-                "32": "ami-6411e20d"
-            },
-            "eu-central-1": {
-                "32": "ami-c9c7978c"
-            },
-            "eu-west-1": {
-                "32": "ami-c6fec8bf"
-            },
-            "eu-west-2": {
-                "32": "ami-afbb56c8"
-            },
-            "eu-west-3": {
-                "32": "ami-5d843520"
-            },
-            "sa-east-1": {
-                "32": "ami-b60854da"
-            }
-        }
-    },
-    "Resources": {
-        "AutoTurbonomic": {
-            "Type": "AWS::EC2::Instance",
-            "Properties": {
-                "ImageId": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
-                        {
-                            "Ref": "AWS::Region"
-                        },
-                        32
-                    ]
-                },
-                "EbsOptimized": true,
-                "InstanceInitiatedShutdownBehavior": "stop",
-                "IamInstanceProfile": {
-                    "Ref": "TurbonomicInstanceProfile"
-                },
-                "InstanceType": {
-                    "Ref": "InstanceType"
-                },
-                "SubnetId": {
-                    "Ref": "TurbonomicSubnet"
-                },
-                "KeyName": {
-                    "Ref": "KeyPair"
-                },
-                "SecurityGroupIds": [
-                    {
-                        "Ref": "TurbonomicSecurityGroup"
-                    }
-                ]
-            }
-        },
-        "TurbonomicSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupName": "TurbonomicSecurityGroup",
-                "GroupDescription": "Creates and limits access to Turbonomic instance through port 443 only",
-                "VpcId": {
-                    "Ref": "TurbonomicVPC"
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 443,
-                        "ToPort": 443
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 22,
-                        "ToPort": 22
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80
-                    }
-                ]
-            },
-            "DependsOn": [
-                "TurbonomicVPC"
-            ]
-        },
-	"TurbonomicInstanceProfile": {
-            "Type": "AWS::IAM::InstanceProfile",
-            "Properties": {
-	        "InstanceProfileName": {
-			"Fn::Join" : [
-				   "", [
-				       "",
-				       "TurbonomicInstanceProfile",
-				       { "Ref":"Customer" }
-				   ]
-			]
-		},
-                "Roles": [
-                    {
-                        "Ref": "TurbonomicRole"
-                    }
-                ]
-            },
-            "DependsOn": [
-                "TurbonomicVPC"
-            ]
-        },
-        "TurbonomicRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "RoleName": {
-			"Fn::Join" : [
-			   "", [
-			        { "Ref": "IAMRoleName" },
-				"-",
-				{ "Ref":"Customer" }
-			   ]
-			 ]
-                },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/AmazonEC2FullAccess",
-                    "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess",
-                    "arn:aws:iam::aws:policy/AmazonRDSFullAccess",
-                    "arn:aws:iam::aws:policy/AWSOrganizationsReadOnlyAccess"
-                ],
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Action": "sts:AssumeRole",
-                            "Principal": {
-                                "Service": [
-                                    "ec2.amazonaws.com"
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "Policies": [
-                    {
-                        "PolicyName": "AssumeRolePolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": "sts:AssumeRole",
-                                    "Resource": "arn:aws:iam::*:role/*"
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        "TurbonomicVPC": {
-            "Type": "AWS::EC2::VPC",
-            "Properties": {
-                "CidrBlock": "172.31.0.0/16",
-                "EnableDnsSupport": true,
-                "EnableDnsHostnames": true,
-                "InstanceTenancy": "default"
-            }
-        },
-        "InternetGateway": {
-            "Type": "AWS::EC2::InternetGateway",
-            "Metadata": {
-                "AWS::CloudFormation::Designer": {
-                    "id": "05cafe26-0d8a-4641-bac7-fb915a0dbe7e"
-                }
-            }
-        },
-        "VPCGatewayAttachment": {
-            "Type": "AWS::EC2::VPCGatewayAttachment",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "TurbonomicVPC"
-                },
-                "InternetGatewayId": {
-                    "Ref": "InternetGateway"
-                }
-            }
-        },
-        "TurbonomicSubnet": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "CidrBlock": "172.31.0.0/20",
-                "MapPublicIpOnLaunch": true,
-                "VpcId": {
-                    "Ref": "TurbonomicVPC"
-                }
-            },
-            "DependsOn": [
-                "TurbonomicVPC"
-            ]
-        },
-        "RouteTable": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "TurbonomicVPC"
-                }
-            }
-        },
-        "InternetRoute": {
-            "Type": "AWS::EC2::Route",
-            "DependsOn": "VPCGatewayAttachment",
-            "Properties": {
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "GatewayId": {
-                    "Ref": "InternetGateway"
-                },
-                "RouteTableId": {
-                    "Ref": "RouteTable"
-                }
-            }
-        },
-        "SubnetARouteTableAssociation": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "RouteTable"
-                },
-                "SubnetId": {
-                    "Ref": "TurbonomicSubnet"
-                }
-            }
-        }
-    }
-}
-
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  InstanceType:
+    Type: String
+    Default: m5.xlarge
+    AllowedValues:
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+    Description: 'Enter m5.2xlarge, m5.xlarge, m5.large. Default is m5.large.'
+  KeyPair:
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    Description: Select an existing Amazon EC2 Key Pair
+  IAMRoleName:
+    Type: String
+    Default: TurbonomicRole
+    Description: Enter Name for the IAM Role
+  Customer:
+    Type: String
+    Description: Enter a unique customer name
+Mappings:
+  RegionMap:
+    us-east-1:
+      '32': ami-2ccc4453
+    us-east-2:
+      '32': ami-77e0dd12
+    us-west-1:
+      '32': ami-f7869897
+    us-west-2:
+      '32': ami-d6d9a9ae
+    ap-northeast-1:
+      '32': ami-3263894d
+    ap-northeast-2:
+      '32': ami-8fca62e1
+    ap-northeast-3:
+      '32': ami-6411e20d
+    ap-south-1:
+      '32': ami-6f331100
+    ap-southeast-1:
+      '32': ami-922017ee
+    ap-southeast-2:
+      '32': ami-cfce18ad
+    ca-central-1:
+      '32': ami-dfad2dbb
+    cn-north-1:
+      '32': ami-66f28c34
+    cn-northwest-1:
+      '32': ami-6411e20d
+    eu-central-1:
+      '32': ami-c9c7978c
+    eu-west-1:
+      '32': ami-c6fec8bf
+    eu-west-2:
+      '32': ami-afbb56c8
+    eu-west-3:
+      '32': ami-5d843520
+    sa-east-1:
+      '32': ami-b60854da
+Resources:
+  AutoTurbonomic:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - 32
+      EbsOptimized: true
+      InstanceInitiatedShutdownBehavior: stop
+      IamInstanceProfile: !Ref TurbonomicInstanceProfile
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref TurbonomicSubnet
+      KeyName: !Ref KeyPair
+      SecurityGroupIds:
+        - !Ref TurbonomicSecurityGroup
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 244d7321-63d0-41a4-82a2-6e56b8593211
+  TurboElasticIp:
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      InstanceId: !Ref AutoTurbonomic
+      Domain: vpc
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 633917ca-09b9-4d97-abc4-6d9504f41da4
+  TurbonomicSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: TurbonomicSecurityGroup
+      GroupDescription: Creates and limits access to Turbonomic instance through port 443 only
+      VpcId: !Ref TurbonomicVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+    DependsOn:
+      - TurbonomicVPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: f1a4e88c-273b-44ec-b8ad-9636233d1e66
+  TurbonomicInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      InstanceProfileName: !Join
+        - ''
+        - - ''
+          - TurbonomicInstanceProfile
+          - !Ref Customer
+      Roles:
+        - !Ref TurbonomicRole
+    DependsOn:
+      - TurbonomicVPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 9b47caea-e8f4-4dbd-9b8b-5f9fcfb4d776
+  TurbonomicRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Join
+        - ''
+        - - !Ref IAMRoleName
+          - '-'
+          - !Ref Customer
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonEC2FullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess'
+        - 'arn:aws:iam::aws:policy/AmazonRDSFullAccess'
+        - 'arn:aws:iam::aws:policy/AWSOrganizationsReadOnlyAccess'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: 'sts:AssumeRole'
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+      Policies:
+        - PolicyName: AssumeRolePolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 'sts:AssumeRole'
+                Resource: 'arn:aws:iam::*:role/*'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 2e9b7ace-0515-4cdc-84bd-77e27211bf50
+  TurbonomicVPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 172.31.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 56355ba6-21c6-4ae5-b403-53614689cd08
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 05cafe26-0d8a-4641-bac7-fb915a0dbe7e
+  VPCGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref TurbonomicVPC
+      InternetGatewayId: !Ref InternetGateway
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: a8372216-380c-4b4e-a349-caf396248d6e
+  TurbonomicSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      CidrBlock: 172.31.0.0/20
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref TurbonomicVPC
+    DependsOn:
+      - TurbonomicVPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: ce043b6c-e962-46b3-b804-b0364717da18
+  RouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref TurbonomicVPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 31d60568-94c1-4a46-a6df-7780ab15306a
+  InternetRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 93ca5ac4-73c2-4c81-9393-177c8a73692f
+  SubnetARouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref TurbonomicSubnet
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 6d6bafc1-6b92-407e-b95e-6ba4c5dc2c23
+Metadata:
+  'AWS::CloudFormation::Designer':
+    05cafe26-0d8a-4641-bac7-fb915a0dbe7e:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 750
+      z: 1
+      embeds: []
+    56355ba6-21c6-4ae5-b403-53614689cd08:
+      size:
+        width: 690
+        height: 600
+      position:
+        x: 60
+        'y': 90
+	z: 1
+      embeds:
+        - 31d60568-94c1-4a46-a6df-7780ab15306a
+        - ce043b6c-e962-46b3-b804-b0364717da18
+        - f1a4e88c-273b-44ec-b8ad-9636233d1e66
+    31d60568-94c1-4a46-a6df-7780ab15306a:
+      size:
+        width: 240
+        height: 240
+      position:
+        x: 390
+        'y': 150
+	z: 2
+      parent: 56355ba6-21c6-4ae5-b403-53614689cd08
+      embeds:
+        - 93ca5ac4-73c2-4c81-9393-177c8a73692f
+      iscontainedinside:
+        - 56355ba6-21c6-4ae5-b403-53614689cd08
+        - 56355ba6-21c6-4ae5-b403-53614689cd08
+        - 56355ba6-21c6-4ae5-b403-53614689cd08
+    ce043b6c-e962-46b3-b804-b0364717da18:
+      size:
+        width: 240
+        height: 240
+	position:
+		x: 90
+		'y': 150
+		z: 2
+      parent: 56355ba6-21c6-4ae5-b403-53614689cd08
+      embeds:
+        - 244d7321-63d0-41a4-82a2-6e56b8593211
+      dependson:
+        - 56355ba6-21c6-4ae5-b403-53614689cd08
+    6d6bafc1-6b92-407e-b95e-6ba4c5dc2c23:
+      source:
+        id: 31d60568-94c1-4a46-a6df-7780ab15306a
+      target:
+        id: ce043b6c-e962-46b3-b804-b0364717da18
+	z: 2
+    a8372216-380c-4b4e-a349-caf396248d6e:
+      source:
+        id: 56355ba6-21c6-4ae5-b403-53614689cd08
+      target:
+        id: 05cafe26-0d8a-4641-bac7-fb915a0dbe7e
+	z: 1
+    93ca5ac4-73c2-4c81-9393-177c8a73692f:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 420
+        'y': 180
+	z: 3
+      parent: 31d60568-94c1-4a46-a6df-7780ab15306a
+      embeds: []
+      isassociatedwith:
+        - 05cafe26-0d8a-4641-bac7-fb915a0dbe7e
+      iscontainedinside:
+        - 31d60568-94c1-4a46-a6df-7780ab15306a
+        - 31d60568-94c1-4a46-a6df-7780ab15306a
+        - 31d60568-94c1-4a46-a6df-7780ab15306a
+      dependson:
+        - a8372216-380c-4b4e-a349-caf396248d6e
+    2e9b7ace-0515-4cdc-84bd-77e27211bf50:
+      size:
+        width: 60
+        height: 60
+	position:
+		x: 180
+		'y': 750
+		z: 1
+      embeds: []
+    9b47caea-e8f4-4dbd-9b8b-5f9fcfb4d776:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 300
+        'y': 750
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 2e9b7ace-0515-4cdc-84bd-77e27211bf50
+      dependson:
+        - 56355ba6-21c6-4ae5-b403-53614689cd08
+    f1a4e88c-273b-44ec-b8ad-9636233d1e66:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 90
+        'y': 450
+      z: 2
+      parent: 56355ba6-21c6-4ae5-b403-53614689cd08
+      embeds: []
+      dependson:
+        - 56355ba6-21c6-4ae5-b403-53614689cd08
+    244d7321-63d0-41a4-82a2-6e56b8593211:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 120
+        'y': 180
+      z: 3
+      parent: ce043b6c-e962-46b3-b804-b0364717da18
+      embeds: []
+      isassociatedwith:
+        - f1a4e88c-273b-44ec-b8ad-9636233d1e66
+      iscontainedinside:
+        - ce043b6c-e962-46b3-b804-b0364717da18
+        - ce043b6c-e962-46b3-b804-b0364717da18
+        - ce043b6c-e962-46b3-b804-b0364717da18
+    633917ca-09b9-4d97-abc4-6d9504f41da4:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 780
+        'y': 90
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 244d7321-63d0-41a4-82a2-6e56b8593211
